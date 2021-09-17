@@ -53,36 +53,32 @@ def make_reversi_vec_env(
 
 
 class SelfPlayEnv(ReversiEnv):
-    def __init__(self, board_shape=8, LocalPlayer=None):
+    def __init__(self, board_shape=8, local_player=None, LocalPlayer=None, verbose=0):
         self.players = [-1, 1]
+        self.verbose = verbose
 
         self.local_player = LocalPlayer(board_shape=board_shape, flatten_action=False)
         self.board_shape = board_shape
         super(SelfPlayEnv, self).__init__(board_shape=board_shape)
         
-        self.action_space = gym.spaces.Discrete(board_shape**2)# Implementar
-        self.observation_space = gym.spaces.Box(-1, 1, (1, board_shape,board_shape))# Implementar
+        self.action_space = gym.spaces.Discrete(board_shape**2)
+        self.observation_space = gym.spaces.Box(-1, 1, (1, board_shape,board_shape)) # aca
          
         
     def play(self, observation):
         action = self.local_player.predict(observation)
         (observation, self.current_player_num), reward, done, info = super(SelfPlayEnv, self).step(action)
-
+        if self.verbose == 1:
+            print(action, done)
         return (observation, self.current_player_num), reward, done, info
     
     def encode_observation(self, observation, valid_actions=False):
-        # Implementar
-        # Simpre devuelve desde el punto de vista del jugador 1
-        # No devuleve el jugador sino solo el tablero
-        # Tener en cuenta que esto será la entrada a la red neuronal
-        #observation = observation * self.player
-        #return observation
         board = observation * self.current_player_num
         if valid_actions:
             return np.array([board, self.get_valid((board, 1))])
         else:
             return observation * self.current_player_num
-      
+    
     
     def reset(self):
         self.n_step = 0
@@ -90,16 +86,21 @@ class SelfPlayEnv(ReversiEnv):
         self.local_player.player = self.local_player_num
         self.observation, self.current_player_num = super(SelfPlayEnv, self).reset()
         self.allow_pass = True
+        if self.verbose:
+            print(f'You play with {-1*self.local_player_num}')
+            print('Initial board')
+            print(self.observation)
             
         if self.current_player_num == self.local_player_num:   
             (self.observation, self.current_player_num), _, done, info = self.play(self.observation)
             assert done == False
-
+            if self.verbose:
+                print('Plays oponent:')
+                print(self.observation)
         
         return self.encode_observation(self.observation)
     
     def encode_action(self, action):
-        # Esta es necesario ya que la salida de la red neuronal será un valor entre 0 y board_shape**2 - 1
         return [action // self.board_shape, action % self.board_shape]
     
     def decode_action(self, action):
@@ -108,17 +109,25 @@ class SelfPlayEnv(ReversiEnv):
     def step(self, action):
         self.n_step += 1
         action = self.encode_action(action)
+        
         (self.observation, self.current_player_num), reward, done, _ = super(SelfPlayEnv, self).step(action)   
+        if self.verbose:
+            print(f'Step: {self.n_step}')
+            print(f'You play:')
+            print(action)
+            print(self.observation)
             
-        while not done and (self.current_player_num == self.local_player_num):            
+        while not done and (self.current_player_num == self.local_player_num):
+            if self.verbose:
+                print('Plays oponent:')
             (self.observation, self.current_player_num), reward, done, info = self.play(self.observation)
+            if self.verbose:
+                print(self.observation)
         
         encoded_observation = self.encode_observation(self.observation)
-        
-        #print(f'encoded_observation[0]: {encoded_observation[0]}')
-        #print(f'encoded_observation[1]: {encoded_observation[1]}')
-        
-        #reward = float(encoded_observation.sum())# Implementar. Tiene que ser un float
+        total_pieces = encoded_observation[0].sum() + encoded_observation[1].sum()
         reward = -float(self.local_player_num*reward)
-        
+
+        if self.verbose:
+            print(f'Reward: {reward}')
         return encoded_observation, reward, done, {} 

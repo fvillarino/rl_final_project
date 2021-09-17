@@ -1,6 +1,6 @@
-import random
 from boardgame2 import ReversiEnv
 import numpy as np
+import gym
 
 class GreedyPlayer():
     def __init__(self, player=1, board_shape=None, env=None, flatten_action=False):
@@ -14,23 +14,18 @@ class GreedyPlayer():
         self.board_shape = self.env.board.shape[0]
     
     def predict(self, board):
-        # Implementar
-        # Primero obtengo las acciones válidas
-        valid_actions = np.argwhere(self.env.get_valid((board,self.player)))     
-        if len(valid_actions)==0:
-            print('PASS')
+        valid_actions = np.argwhere(self.env.get_valid((board, self.player)) == 1)
+        if len(valid_actions) == 0:
+            print('pass')
             action = self.env.PASS
         else:
-            actions_score = []
+            moves_score = []
             for a in valid_actions:
-                (next_state, _), reward, done, _ = self.env.next_step((board, self.player), a)
-                actions_score.append(next_state.sum()*self.player)
-            best_action_score = max(actions_score)
-            best_actions = valid_actions[np.array(actions_score)==best_action_score]
-            action = best_actions[random.randint(0,len(best_actions)-1)]
-        # Tiene que devoler la acción en la que come más piezas.
-        # A igualdad de piezas comidas, samplear uniformemente
-        self.env.action_space
+                next_state, _, _, _ = self.env.next_step((board, self.player), a)
+                moves_score.append(next_state[0].sum() * self.player)
+            best_score = max(moves_score)
+            best_actions = valid_actions[np.array(moves_score)==best_score]
+            action = best_actions[np.random.randint(len(best_actions))]
         if self.flatten_action:
             return action[0] * self.board_shape + action[1]
         else:
@@ -48,17 +43,12 @@ class RandomPlayer():
         self.board_shape = self.env.board.shape[0]
     
     def predict(self, board):
-        # Muestrea aleatoriamente las acciones válidas
-        # Puede usar la función creada en la notebook anterior
-        #action = sample_valid_actions((board,self.player))
-        #print(self.env.get_valid((board,self.player)))
-        mat_valid_actions = self.env.get_valid((board,self.player))
-        if mat_valid_actions.sum()==0:
-            print('PASS')
+        valid_actions = np.argwhere(self.env.get_valid((board, self.player)) == 1)
+        if len(valid_actions) == 0:
+            print('pass')
             action = self.env.PASS
         else:
-            valid_actions = np.argwhere(mat_valid_actions) # Acciones validas
-            action = valid_actions[random.randint(0,len(valid_actions)-1)]
+            action = valid_actions[np.random.randint(len(valid_actions))]
         if self.flatten_action:
             return action[0] * self.board_shape + action[1]
         else:
@@ -66,7 +56,7 @@ class RandomPlayer():
         
 
 class DictPolicyPlayer():
-    def __init__(self, player=1, board_shape=4, env=None, flatten_action=False, dict_folder='mdp/pi_mdp.npy'):
+    def __init__(self, player=1, board_shape=4, env=None, flatten_action=False, dict_folder='mdp/pi_func_only_winner.npy'):
         self.pi_dict = np.load(dict_folder, allow_pickle=True).item()
         if env is None:
             env = ReversiEnv(board_shape=board_shape)
@@ -75,14 +65,9 @@ class DictPolicyPlayer():
         self.board_shape = board_shape
     
     def predict(self, board):
-        # Elegir la acción optima y devolverla
-        board_tuple = tuple((board*self.player).reshape(-1))
-        if board_tuple in self.pi_dict:
-            action = np.array(self.pi_dict[board_tuple])
-        else:
-            print('PASS')
-            action = np.array([-1, 0])
+        board_tuple = tuple((board * self.player).reshape(-1))
+        action = self.pi_dict[board_tuple]
         if self.flatten_action:
-            return action[0] * self.board_shape + action[1]
-        else:
             return action
+        else:
+            return [action // self.board_shape, action % self.board_shape]
